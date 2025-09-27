@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aggiungi Gatto - StreetCats</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+    
+    <!-- Marked.js per anteprima Markdown -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <nav class="nav">
+                <a href="index.html" class="logo">
+                    🐱 StreetCats
+                </a>
+                
+                <div class="nav-buttons" id="navButtons">
+                    <!-- Verrà popolato dinamicamente da JavaScript -->
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <div class="form-container wide">
+                <h2 class="form-title">🐱 Aggiungi un Nuovo Gatto</h2>
+                
+                <p style="text-align: center; color: #7f8c8d; margin-bottom: 30px;">
+                    Condividi con la community un avvistamento di gatto randagio nella tua zona
+                </p>
+                
+                <!-- Alert container per messaggi -->
+                <div id="addCatAlerts"></div>
+                
+                <form id="addCatForm" enctype="multipart/form-data">
+                    <!-- Upload Foto -->
+                    <div class="form-group">
+                        <label for="catImage">Foto del Gatto *</label>
+                        <input type="file" 
+                               class="form-control" 
+                               id="catImage" 
+                               name="catImage"
+                               accept="image/*" 
+                               required>
+                        <small style="color: #7f8c8d; font-size: 0.8rem;">
+                            Formati supportati: JPG, PNG, GIF. Massimo 5MB.
+                        </small>
+                        
+                        <!-- Anteprima immagine -->
+                        <div id="imagePreview" style="margin-top: 10px; display: none;">
+                            <img id="previewImg" style="max-width: 200px; max-height: 200px; border-radius: 8px; object-fit: cover;">
+                        </div>
+                    </div>
+                    
+                    <!-- Nome/Titolo -->
+                    <div class="form-group">
+                        <label for="catName">Nome o Titolo *</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="catName" 
+                               name="catName"
+                               required
+                               placeholder="es. Gatto rosso vicino al parco, Micia del quartiere..."
+                               maxlength="100">
+                        <small style="color: #7f8c8d; font-size: 0.8rem;">
+                            Un nome o breve descrizione che identifichi il gatto
+                        </small>
+                    </div>
+                    
+                    <!-- Descrizione con supporto Markdown -->
+                    <div class="form-group">
+                        <label for="catDescription">Descrizione (supporta Markdown) *</label>
+                        <textarea class="form-control" 
+                                  id="catDescription" 
+                                  name="catDescription"
+                                  required
+                                  rows="6"
+                                  placeholder="Descrivi il gatto che hai visto...
+
+Puoi usare la formattazione Markdown:
+- **grassetto** per evidenziare
+- *corsivo* per enfasi
+- [link](https://esempio.com) per collegamenti
+- - elenchi puntati
+- ## Sottotitoli
+
+Esempio:
+Questo **bellissimo gatto rosso** vive nel quartiere da diversi mesi. È molto *timido* ma sembra in buona salute. Se lo vedete, non dategli da mangiare senza prima contattare i servizi veterinari locali."></textarea>
+                        
+                        <!-- Toggle anteprima Markdown -->
+                        <div style="margin-top: 10px;">
+                            <button type="button" 
+                                    class="btn btn-secondary" 
+                                    id="togglePreview"
+                                    style="font-size: 0.8rem; padding: 5px 10px;">
+                                👁️ Anteprima Markdown
+                            </button>
+                        </div>
+                        
+                        <!-- Anteprima Markdown -->
+                        <div id="markdownPreview" 
+                             style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea; display: none;">
+                            <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 0.9rem;">Anteprima:</h4>
+                            <div id="markdownContent"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Mappa per selezionare posizione -->
+                    <div class="form-group">
+                        <label>Posizione sulla Mappa *</label>
+                        <div id="addMap" class="map small"></div>
+                        <p class="map-instructions">
+                            📍 Clicca sulla mappa per selezionare la posizione esatta dove hai visto il gatto
+                        </p>
+                        
+                        <!-- Campi nascosti per coordinate -->
+                        <input type="hidden" id="catLat" name="catLat" required>
+                        <input type="hidden" id="catLng" name="catLng" required>
+                        
+                        <!-- Mostra coordinate selezionate -->
+                        <div id="selectedCoords" style="margin-top: 10px; font-size: 0.8rem; color: #666; display: none;">
+                            <strong>Posizione selezionata:</strong> <span id="coordsDisplay"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Informazioni aggiuntive -->
+                    <div class="form-group">
+                        <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
+                            <h4 style="margin: 0 0 10px 0; color: #2c3e50; font-size: 0.9rem;">
+                                💡 Suggerimenti per un buon avvistamento:
+                            </h4>
+                            <ul style="margin: 0; padding-left: 20px; font-size: 0.8rem; color: #555;">
+                                <li>Scatta una foto chiara del gatto</li>
+                                <li>Descrivi il suo aspetto (colore, dimensione, particolarità)</li>
+                                <li>Indica se sembra randagio o ha un proprietario</li>
+                                <li>Seleziona la posizione precisa sulla mappa</li>
+                                <li>Aggiungi info utili (orario, comportamento, condizioni di salute)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Checkbox responsabilità -->
+                    <div class="form-group">
+                        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="terms" name="terms" required style="margin-top: 3px;">
+                            <span style="font-size: 0.9rem; line-height: 1.4;">
+                                Confermo che le informazioni fornite sono veritiere e che l'avvistamento è reale. 
+                                Mi impegno a utilizzare questa piattaforma in modo responsabile per il benessere degli animali.
+                            </span>
+                        </label>
+                    </div>
+                    
+                    <!-- Pulsanti -->
+                    <div style="display: flex; gap: 15px; margin-top: 30px;">
+                        <a href="index.html" class="btn btn-secondary" style="flex: 1; text-align: center;">
+                            ← Annulla
+                        </a>
+                        <button type="submit" class="btn btn-success" id="addCatBtn" style="flex: 2;">
+                            🐱 Aggiungi Gatto
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/cats.js"></script>
+    
+    <script>
+        // Script principale per add-cat.html
+        let previewVisible = false;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            initializePage();
+        });
+
+        function initializePage() {
+            // Controlla autenticazione (già gestito da cats.js)
+            if (!Utils.AuthManager.isLoggedIn()) {
+                Utils.AuthManager.requireAuth();
+                return;
+            }
+            
+            // Setup navigazione
+            setupNavigation();
+            
+            // Setup form handlers
+            setupFormHandlers();
+            
+            // Focus sul primo campo
+            document.getElementById('catImage').focus();
+        }
+
+        function setupNavigation() {
+            const navButtons = document.getElementById('navButtons');
+            const user = Utils.AuthManager.getUser();
+
+            if (user) {
+                navButtons.innerHTML = `
+                    <span class="user-info">
+                        👋 Ciao, ${user.name}
+                    </span>
+                    <a href="index.html" class="btn btn-secondary">Mappa</a>
+                    <button class="btn btn-danger" onclick="handleLogoutClick()">Logout</button>
+                `;
+            }
+        }
+
+        function setupFormHandlers() {
+            // Anteprima immagine
+            const imageInput = document.getElementById('catImage');
+            imageInput.addEventListener('change', handleImagePreview);
+            
+            // Anteprima Markdown
+            const toggleBtn = document.getElementById('togglePreview');
+            const descriptionTextarea = document.getElementById('catDescription');
+            
+            toggleBtn.addEventListener('click', toggleMarkdownPreview);
+            
+            // Aggiorna anteprima mentre si scrive
+            descriptionTextarea.addEventListener('input', debounce(updateMarkdownPreview, 500));
+            
+            // Aggiorna coordinate visualizzate
+            const latField = document.getElementById('catLat');
+            const lngField = document.getElementById('catLng');
+            
+            const updateCoords = () => {
+                const lat = latField.value;
+                const lng = lngField.value;
+                
+                if (lat && lng) {
+                    document.getElementById('coordsDisplay').textContent = 
+                        `${parseFloat(lat).toFixed(6)}, ${parseFloat(lng).toFixed(6)}`;
+                    document.getElementById('selectedCoords').style.display = 'block';
+                } else {
+                    document.getElementById('selectedCoords').style.display = 'none';
+                }
+            };
+            
+            // Osserva cambiamenti coordinate (quando si clicca sulla mappa)
+            const observer = new MutationObserver(updateCoords);
+            observer.observe(latField, { attributes: true, attributeFilter: ['value'] });
+            observer.observe(lngField, { attributes: true, attributeFilter: ['value'] });
+            
+            // Controllo anche con eventi input
+            latField.addEventListener('input', updateCoords);
+            lngField.addEventListener('input', updateCoords);
+        }
+
+        function handleImagePreview(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('imagePreview');
+            const previewImg = document.getElementById('previewImg');
+            
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                
+                reader.readAsDataURL(file);
+                
+                // Mostra info file
+                const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                console.log(`File selezionato: ${file.name} (${fileSize}MB)`);
+                
+                // Avviso se file troppo grande
+                if (file.size > 5 * 1024 * 1024) {
+                    window.alertManager.warning('File molto grande (>5MB). Potrebbero esserci problemi di upload.');
+                }
+                
+            } else {
+                preview.style.display = 'none';
+                if (file) {
+                    window.alertManager.error('Seleziona un file immagine valido');
+                }
+            }
+        }
+
+        function toggleMarkdownPreview() {
+            const preview = document.getElementById('markdownPreview');
+            const btn = document.getElementById('togglePreview');
+            
+            previewVisible = !previewVisible;
+            
+            if (previewVisible) {
+                preview.style.display = 'block';
+                btn.textContent = '🙈 Nascondi Anteprima';
+                updateMarkdownPreview();
+            } else {
+                preview.style.display = 'none';
+                btn.textContent = '👁️ Anteprima Markdown';
+            }
+        }
+
+        function updateMarkdownPreview() {
+            if (!previewVisible) return;
+            
+            const textarea = document.getElementById('catDescription');
+            const content = document.getElementById('markdownContent');
+            
+            const text = textarea.value.trim();
+            
+            if (text) {
+                try {
+                    // Usa marked.js per convertire Markdown in HTML
+                    content.innerHTML = marked.parse(text);
+                } catch (error) {
+                    content.innerHTML = '<p style="color: #e74c3c;">Errore nel parsing Markdown</p>';
+                }
+            } else {
+                content.innerHTML = '<p style="color: #7f8c8d; font-style: italic;">Scrivi qualcosa per vedere l\'anteprima...</p>';
+            }
+        }
+
+        // Utility per limitare chiamate frequenti
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Gestione resize finestra per mappa
+        window.addEventListener('resize', function() {
+            // La mappa verrà reinizializzata da cats.js quando necessario
+            setTimeout(() => {
+                if (window.CatsManager && window.CatsManager.initializeAddCatMap) {
+                    window.CatsManager.initializeAddCatMap();
+                }
+            }, 100);
+        });
+
+        // Conferma prima di uscire se form compilato
+        window.addEventListener('beforeunload', function(e) {
+            const form = document.getElementById('addCatForm');
+            const formData = new FormData(form);
+            
+            let hasData = false;
+            for (let [key, value] of formData.entries()) {
+                if (value && key !== 'terms') {
+                    hasData = true;
+                    break;
+                }
+            }
+            
+            if (hasData) {
+                e.preventDefault();
+                e.returnValue = 'Hai modifiche non salvate. Sei sicuro di voler uscire?';
+                return e.returnValue;
+            }
+        });
+    </script>
+</body>
+</html>
