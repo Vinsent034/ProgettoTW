@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreetCats - Scopri i Gatti di Strada</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <nav class="nav">
+                <a href="index.html" class="logo">
+                    🐱 StreetCats
+                </a>
+                
+                <div class="nav-buttons" id="navButtons">
+                    <!-- Verrà popolato dinamicamente da JavaScript -->
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Hero Section -->
+            <div class="hero">
+                <h1>Scopri i Gatti di Strada</h1>
+                <p>Una mappa interattiva per trovare e condividere avvistamenti di gatti randagi nella tua città</p>
+            </div>
+
+            <!-- Mappa Interattiva -->
+            <div id="map" class="map"></div>
+
+            <!-- Griglia Gatti -->
+            <section id="catsSection">
+                <div id="catsGrid" class="cats-grid">
+                    <!-- I gatti verranno caricati dinamicamente -->
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/cats.js"></script>
+    
+    <script>
+        // Script principale per index.html
+        let map;
+        let catsData = [];
+
+        // Inizializzazione pagina
+        document.addEventListener('DOMContentLoaded', function() {
+            initializePage();
+        });
+
+        async function initializePage() {
+            try {
+                // Setup navigazione
+                setupNavigation();
+                
+                // Inizializza mappa
+                initializeMap();
+                
+                // Carica gatti
+                await loadAndDisplayCats();
+                
+            } catch (error) {
+                console.error('Errore inizializzazione:', error);
+                window.alertManager.error('Errore durante il caricamento della pagina');
+            }
+        }
+
+        function setupNavigation() {
+            const navButtons = document.getElementById('navButtons');
+            const isLoggedIn = Utils.AuthManager.isLoggedIn();
+            const user = Utils.AuthManager.getUser();
+
+            if (isLoggedIn && user) {
+                navButtons.innerHTML = `
+                    <span class="user-info">
+                        👋 Ciao, ${user.name}
+                    </span>
+                    <a href="add-cat.html" class="btn btn-success">Aggiungi Gatto</a>
+                    <button class="btn btn-danger" onclick="handleLogout()">Logout</button>
+                `;
+            } else {
+                navButtons.innerHTML = `
+                    <a href="login.html" class="btn btn-secondary">Accedi</a>
+                    <a href="register.html" class="btn btn-primary">Registrati</a>
+                `;
+            }
+        }
+
+        function initializeMap() {
+            map = L.map('map').setView(window.APP_CONFIG.MAP.DEFAULT_CENTER, window.APP_CONFIG.MAP.DEFAULT_ZOOM);
+            
+            L.tileLayer(window.APP_CONFIG.MAP.TILE_LAYER, {
+                attribution: window.APP_CONFIG.MAP.ATTRIBUTION
+            }).addTo(map);
+        }
+
+        async function loadAndDisplayCats() {
+            try {
+                // Mostra loading
+                Utils.LoadingManager.show('catsGrid', window.APP_CONFIG.MESSAGES.LOADING.CATS);
+                
+                // Fetch gatti dall'API
+                catsData = await Utils.ApiClient.get(window.APP_CONFIG.API.ENDPOINTS.CATS);
+                
+                // Mostra gatti nella griglia
+                displayCatsGrid();
+                
+                // Mostra gatti sulla mappa
+                displayCatsOnMap();
+                
+            } catch (error) {
+                console.error('Errore caricamento gatti:', error);
+                document.getElementById('catsGrid').innerHTML = `
+                    <div class="empty-state">
+                        <h3>Errore di caricamento</h3>
+                        <p>Non è stato possibile caricare i gatti. Riprova più tardi.</p>
+                        <button class="btn btn-primary" onclick="loadAndDisplayCats()">Riprova</button>
+                    </div>
+                `;
+                window.alertManager.error('Errore nel caricamento dei gatti');
+            }
+        }
+
+        function displayCatsGrid() {
+            const grid = document.getElementById('catsGrid');
+            
+            if (!catsData || catsData.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Nessun gatto trovato</h3>
+                        <p>Sii il primo ad aggiungere un avvistamento!</p>
+                        ${Utils.AuthManager.isLoggedIn() ? 
+                            '<a href="add-cat.html" class="btn btn-success">Aggiungi il primo gatto</a>' : 
+                            '<a href="register.html" class="btn btn-primary">Registrati per aggiungere</a>'
+                        }
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = catsData.map(cat => `
+                <a href="cat-detail.html?id=${cat._id}" class="cat-card">
+                    <img src="${Utils.FormatUtils.getImageUrl(cat.image)}" 
+                         alt="${cat.name}" 
+                         class="cat-image" 
+                         onerror="this.src='https://via.placeholder.com/300x200?text=Immagine+non+disponibile'">
+                    <div class="cat-content">
+                        <h3 class="cat-title">${cat.name}</h3>
+                        <div class="cat-description">
+                            ${Utils.FormatUtils.truncateText(cat.description)}
+                        </div>
+                        <div class="cat-date">
+                            📅 ${Utils.FormatUtils.formatDate(cat.date)}
+                        </div>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        function displayCatsOnMap() {
+            // Rimuovi marker esistenti
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // Aggiungi marker per ogni gatto
+            catsData.forEach(cat => {
+                const marker = L.marker([cat.location.lat, cat.location.lng])
+                    .addTo(map)
+                    .bindPopup(`
+                        <div style="text-align: center; max-width: 200px;">
+                            <img src="${Utils.FormatUtils.getImageUrl(cat.image)}" 
+                                 style="width: 100%; height: 100px; object-fit: cover; border-radius: 5px; margin-bottom: 10px;"
+                                 onerror="this.style.display='none'">
+                            <h4 style="margin: 5px 0; font-size: 1rem;">${cat.name}</h4>
+                            <p style="margin: 5px 0; font-size: 0.8rem; color: #666;">
+                                ${Utils.FormatUtils.truncateText(cat.description, 60)}
+                            </p>
+                            <a href="cat-detail.html?id=${cat._id}" 
+                               style="display: inline-block; background: #667eea; color: white; padding: 5px 10px; border-radius: 5px; text-decoration: none; font-size: 0.8rem; margin-top: 5px;">
+                                Vedi Dettagli →
+                            </a>
+                        </div>
+                    `);
+            });
+
+            // Adatta la vista della mappa se ci sono gatti
+            if (catsData.length > 0) {
+                const group = new L.featureGroup(
+                    catsData.map(cat => L.marker([cat.location.lat, cat.location.lng]))
+                );
+                
+                // Centra la mappa sui marker solo se necessario
+                try {
+                    map.fitBounds(group.getBounds(), { padding: [20, 20] });
+                } catch (e) {
+                    // Se fallisce, mantieni la vista predefinita
+                    console.log('Impossibile adattare i bounds, uso vista predefinita');
+                }
+            }
+        }
+
+        // Gestione logout
+        function handleLogout() {
+            if (confirm('Sei sicuro di voler uscire?')) {
+                Utils.AuthManager.clearAuth();
+                window.alertManager.success(window.APP_CONFIG.MESSAGES.SUCCESS.LOGOUT);
+                
+                // Ricarica navigazione
+                setTimeout(() => {
+                    setupNavigation();
+                }, 1000);
+            }
+        }
+
+        // Gestione resize finestra per mappa
+        window.addEventListener('resize', function() {
+            if (map) {
+                setTimeout(() => {
+                    map.invalidateSize();
+                }, 100);
+            }
+        });
+    </script>
+</body>
+</html>
