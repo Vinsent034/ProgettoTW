@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - StreetCats</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+        
+        .auth-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 2rem;
+        }
+        
+        .logo {
+            font-size: 3rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        
+        .form-switch {
+            margin-bottom: 1rem;
+        }
+        
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 0.5rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        .success-message {
+            background: #d1edff;
+            color: #0c5460;
+            padding: 0.5rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="container">
+            <div class="row justify-content-center">
+                <div class="col-md-6 col-lg-4">
+                    <div class="auth-card">
+                        <!-- Logo -->
+                        <div class="logo">🐱</div>
+                        <h2 class="text-center mb-4">StreetCats</h2>
+                        
+                        <!-- Switch Login/Register -->
+                        <div class="text-center mb-4">
+                            <div class="btn-group" role="group">
+                                <input type="radio" class="btn-check" name="authMode" id="loginMode" checked>
+                                <label class="btn btn-outline-primary" for="loginMode">Login</label>
+                                
+                                <input type="radio" class="btn-check" name="authMode" id="registerMode">
+                                <label class="btn btn-outline-primary" for="registerMode">Registrati</label>
+                            </div>
+                        </div>
+                        
+                        <!-- Messaggi -->
+                        <div id="errorMessage" class="error-message"></div>
+                        <div id="successMessage" class="success-message"></div>
+                        
+                        <!-- Form -->
+                        <form id="authForm">
+                            <!-- Nome (solo per registrazione) -->
+                            <div id="nameField" class="mb-3" style="display: none;">
+                                <label for="name" class="form-label">Nome</label>
+                                <input type="text" class="form-control" id="name" placeholder="Il tuo nome">
+                            </div>
+                            
+                            <!-- Email -->
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="email" required placeholder="tua@email.com">
+                            </div>
+                            
+                            <!-- Password -->
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="password" required placeholder="La tua password">
+                                <div id="passwordHelp" class="form-text" style="display: none;">
+                                    Minimo 6 caratteri
+                                </div>
+                            </div>
+                            
+                            <!-- Submit Button -->
+                            <button type="submit" class="btn btn-primary w-100" id="submitBtn">
+                                Accedi
+                            </button>
+                        </form>
+                        
+                        <!-- Link ritorno -->
+                        <div class="text-center mt-3">
+                            <a href="index.html" class="text-muted">← Torna alla mappa</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        const API_URL = 'http://localhost:3000';
+        let isRegisterMode = false;
+
+        // Inizializza la pagina
+        document.addEventListener('DOMContentLoaded', function() {
+            // Controlla se già loggato
+            if (localStorage.getItem('token')) {
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Switch tra login e registrazione
+            document.getElementById('loginMode').addEventListener('change', function() {
+                if (this.checked) switchToLogin();
+            });
+            
+            document.getElementById('registerMode').addEventListener('change', function() {
+                if (this.checked) switchToRegister();
+            });
+            
+            // Submit form
+            document.getElementById('authForm').addEventListener('submit', handleSubmit);
+        }
+
+        function switchToLogin() {
+            isRegisterMode = false;
+            document.getElementById('nameField').style.display = 'none';
+            document.getElementById('passwordHelp').style.display = 'none';
+            document.getElementById('submitBtn').textContent = 'Accedi';
+            clearMessages();
+        }
+
+        function switchToRegister() {
+            isRegisterMode = true;
+            document.getElementById('nameField').style.display = 'block';
+            document.getElementById('passwordHelp').style.display = 'block';
+            document.getElementById('submitBtn').textContent = 'Registrati';
+            clearMessages();
+        }
+
+        async function handleSubmit(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const name = document.getElementById('name').value;
+            
+            // Validazione basic
+            if (!email || !password) {
+                showError('Compila tutti i campi obbligatori');
+                return;
+            }
+            
+            if (isRegisterMode && !name) {
+                showError('Il nome è obbligatorio per la registrazione');
+                return;
+            }
+            
+            if (password.length < 6) {
+                showError('La password deve essere di almeno 6 caratteri');
+                return;
+            }
+            
+            // Disabilita il form durante la richiesta
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Elaborando...';
+            
+            try {
+                if (isRegisterMode) {
+                    await register(email, password, name);
+                } else {
+                    await login(email, password);
+                }
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        }
+
+        async function register(email, password, name) {
+            const response = await fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password, name })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Errore durante la registrazione');
+            }
+            
+            showSuccess('Registrazione completata! Ora puoi fare il login.');
+            
+            // Switch automatico al login
+            setTimeout(() => {
+                document.getElementById('loginMode').click();
+            }, 1500);
+        }
+
+        async function login(email, password) {
+    console.log('Tentativo login per:', email);
+    
+    const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email, password })
+    });
+    
+    console.log('Status login:', response.status);
+    
+    const data = await response.json();
+    console.log('Dati ricevuti dal login:', data);
+    
+    if (!response.ok) {
+        throw new Error(data.error || 'Errore durante il login');
+    }
+    
+    // Controlla se il token c'è
+    if (!data.token) {
+        console.error('Token mancante nella risposta!');
+        throw new Error('Token mancante nella risposta del server');
+    }
+    
+    console.log('Salvo token:', data.token);
+    console.log('Salvo utente:', data.user);
+    
+    // Salva token e dati utente
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    
+    // Verifica che sia stato salvato
+    console.log('Token salvato?', localStorage.getItem('token'));
+    
+    showSuccess('Login effettuato! Reindirizzamento...');
+    
+    setTimeout(() => {
+        window.location.href = 'index.html';
+    }, 1000);
+}
+
+        function showError(message) {
+            clearMessages();
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function showSuccess(message) {
+            clearMessages();
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+
+        function clearMessages() {
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
