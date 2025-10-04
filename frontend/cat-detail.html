@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dettaglio Gatto - StreetCats</title>
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <style>
+        .cat-image {
+            width: 100%;
+            max-height: 400px;
+            object-fit: cover;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        #detailMap {
+            height: 300px;
+            border-radius: 10px;
+        }
+        
+        .cat-info {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+        }
+        
+        .comments-section {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 1.5rem;
+        }
+        
+        .comment-item {
+            border-bottom: 1px solid #eee;
+            padding: 1rem 0;
+        }
+        
+        .comment-item:last-child {
+            border-bottom: none;
+        }
+        
+        .comment-author {
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .comment-date {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        .description-content {
+            line-height: 1.6;
+        }
+        
+        .back-btn {
+            margin-bottom: 1rem;
+        }
+        
+        .owner-actions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">StreetCats</a>
+            <div class="navbar-nav ms-auto">
+                <a href="index.html" class="btn btn-outline-light btn-sm">Torna alla Mappa</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Caricamento...</span>
+            </div>
+            <p>Caricamento dettagli gatto...</p>
+        </div>
+        
+        <div id="errorContainer" style="display: none;">
+            <div class="alert alert-danger text-center">
+                <h4>Gatto non trovato</h4>
+                <p>Il gatto che stai cercando non esiste o è stato rimosso.</p>
+                <a href="index.html" class="btn btn-primary">Torna alla Mappa</a>
+            </div>
+        </div>
+        
+        <div id="catContent" style="display: none;">
+            <div class="back-btn">
+                <a href="index.html" class="btn btn-outline-primary">Torna alla Mappa</a>
+            </div>
+            
+            <div class="row">
+                <div class="col-lg-6 mb-4">
+                    <img id="catImage" class="cat-image" alt="Foto del gatto">
+                    
+                    <div class="cat-info mt-3">
+                        <h1 id="catName" class="mb-2"></h1>
+                        <p class="text-muted mb-2">
+                            <strong>Avvistato il:</strong> <span id="catDate"></span>
+                        </p>
+                        <p class="text-muted">
+                            <strong>Segnalato da:</strong> <span id="catAuthor"></span>
+                        </p>
+                        
+                        <div id="ownerActions" class="owner-actions" style="display: none;">
+                            <h6>Azioni Proprietario</h6>
+                            <p class="small text-muted mb-2">Sei il proprietario di questo post</p>
+                            <button class="btn btn-danger btn-sm" onclick="deleteCat()">
+                                Elimina Gatto
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <h5>Posizione dell'Avvistamento</h5>
+                        <div id="detailMap"></div>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <div class="mb-4">
+                        <h4>Descrizione</h4>
+                        <div id="catDescription" class="description-content"></div>
+                    </div>
+                    
+                    <div class="comments-section">
+                        <h4 class="mb-3">Commenti</h4>
+                        
+                        <div id="commentForm" style="display: none;">
+                            <div class="mb-3">
+                                <textarea id="newComment" class="form-control" rows="3" 
+                                         placeholder="Scrivi un commento su questo gatto..."></textarea>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="addComment()">
+                                Aggiungi Commento
+                            </button>
+                            <hr>
+                        </div>
+                        
+                        <div id="loginPrompt" style="display: none;">
+                            <div class="alert alert-info">
+                                <a href="login.html">Effettua il login</a> per aggiungere un commento
+                            </div>
+                            <hr>
+                        </div>
+                        
+                        <div id="commentsList">
+                            <p class="text-muted text-center">Nessun commento ancora. Sii il primo!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Conferma Eliminazione</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Sei sicuro di voler eliminare <strong id="deleteModalCatName"></strong>?</p>
+                    <p class="text-danger small">Questa azione non può essere annullata.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                        Elimina Definitivamente
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    <script>
+        const API_URL = 'http://localhost:3000';
+        let map;
+        let catId;
+        let catData;
+        let comments = [];
+        let deleteModal;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            catId = urlParams.get('id');
+            
+            console.log('ID gatto dalla URL:', catId);
+            
+            if (!catId) {
+                console.log('ID mancante!');
+                showError();
+                return;
+            }
+            
+            deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+            checkAuth();
+            loadCatDetails();
+        });
+
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            
+            if (token) {
+                document.getElementById('commentForm').style.display = 'block';
+                document.getElementById('loginPrompt').style.display = 'none';
+            } else {
+                document.getElementById('commentForm').style.display = 'none';
+                document.getElementById('loginPrompt').style.display = 'block';
+            }
+        }
+
+        async function loadCatDetails() {
+            try {
+                console.log('caricamento gatto:', catId);
+                const response = await fetch(`${API_URL}/cats/${catId}`);
+                
+                console.log('risposta:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error('Gatto non trovato');
+                }
+                
+                catData = await response.json();
+                console.log('dati gatto:', catData);
+                
+                displayCatDetails();
+                checkOwnership();
+                initMap();
+                loadComments();
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('catContent').style.display = 'block';
+                
+            } catch (error) {
+                console.log('errore caricamento:', error);
+                showError();
+            }
+        }
+
+        function displayCatDetails() {
+            document.getElementById('catName').textContent = catData.name;
+            document.getElementById('catDate').textContent = formatDate(catData.date);
+            
+            // gestisci author come oggetto o stringa
+            let authorName = 'Utente anonimo';
+            if (catData.author) {
+                if (typeof catData.author === 'object') {
+                    authorName = catData.author.name || catData.author.email || 'Utente';
+                } else {
+                    authorName = catData.author;
+                }
+            }
+            document.getElementById('catAuthor').textContent = authorName;
+            
+            const img = document.getElementById('catImage');
+            img.src = `${API_URL}/uploads/${catData.image}`;
+            img.onerror = function() {
+                this.src = 'https://via.placeholder.com/400x300?text=Immagine+non+disponibile';
+            };
+            
+            const description = document.getElementById('catDescription');
+            description.innerHTML = formatDescription(catData.description);
+        }
+
+        function checkOwnership() {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            let authorId;
+            if (typeof catData.author === 'object' && catData.author._id) {
+                authorId = catData.author._id.toString();
+            } else if (typeof catData.author === 'string') {
+                authorId = catData.author;
+            } else {
+                authorId = null;
+            }
+            
+            if (user.id && authorId && user.id.toString() === authorId) {
+                document.getElementById('ownerActions').style.display = 'block';
+            }
+        }
+
+        function deleteCat() {
+            document.getElementById('deleteModalCatName').textContent = catData.name;
+            deleteModal.show();
+        }
+
+        async function confirmDelete() {
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    alert('Devi essere loggato per eliminare un gatto');
+                    deleteModal.hide();
+                    return;
+                }
+                
+                const response = await fetch(`${API_URL}/cats/${catId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    deleteModal.hide();
+                    alert('Gatto eliminato con successo!');
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 500);
+                } else {
+                    throw new Error(data.message || data.error || 'Errore');
+                }
+                
+            } catch (error) {
+                console.log('errore eliminazione:', error.message);
+                deleteModal.hide();
+                alert('Errore: ' + error.message);
+            }
+        }
+
+        function formatDescription(text) {
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/\n/g, '<br>')
+                .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
+        }
+
+        function initMap() {
+            const lat = catData.location.lat;
+            const lng = catData.location.lng;
+            
+            map = L.map('detailMap').setView([lat, lng], 15);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            L.marker([lat, lng])
+                .addTo(map)
+                .bindPopup(`${catData.name} avvistato qui`)
+                .openPopup();
+        }
+
+        async function loadComments() {
+            try {
+                const response = await fetch(`${API_URL}/comments/${catId}`);
+                
+                if (!response.ok) {
+                    throw new Error('Errore caricamento commenti');
+                }
+                
+                comments = await response.json();
+                console.log('commenti caricati:', comments.length);
+                displayComments();
+                
+            } catch (error) {
+                console.log('errore commenti:', error);
+                displayComments();
+            }
+        }
+
+        function displayComments() {
+            const commentsList = document.getElementById('commentsList');
+            
+            if (comments.length === 0) {
+                commentsList.innerHTML = '<p class="text-muted text-center">Nessun commento ancora. Sii il primo!</p>';
+                return;
+            }
+            
+            const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            commentsList.innerHTML = comments.map(comment => {
+                const isAuthor = currentUser.id && comment.author && 
+                                (comment.author._id === currentUser.id || comment.author === currentUser.id);
+                
+                const authorName = comment.author?.name || comment.author || 'Utente anonimo';
+                
+                return `
+                    <div class="comment-item" data-comment-id="${comment._id}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="comment-author">${authorName}</div>
+                                <div class="comment-date">${formatDate(comment.date || comment.createdAt)}</div>
+                                <div class="mt-2">${escapeHtml(comment.text)}</div>
+                            </div>
+                            ${isAuthor ? `
+                                <button class="btn btn-danger btn-sm" onclick="deleteComment('${comment._id}')" title="Elimina commento">
+                                    X
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function addComment() {
+            const textarea = document.getElementById('newComment');
+            const text = textarea.value.trim();
+            
+            if (!text) {
+                alert('Scrivi qualcosa nel commento!');
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    alert('Devi essere loggato per commentare!');
+                    window.location.href = 'login.html';
+                    return;
+                }
+                
+                const response = await fetch(`${API_URL}/comments/${catId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ text })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Errore');
+                }
+                
+                const newComment = await response.json();
+                comments.unshift(newComment);
+                displayComments();
+                textarea.value = '';
+                
+            } catch (error) {
+                console.log('errore:', error);
+                alert('Errore: ' + error.message);
+            }
+        }
+
+        async function deleteComment(commentId) {
+            if (!confirm('Sei sicuro di voler eliminare questo commento?')) {
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    alert('Devi essere loggato!');
+                    return;
+                }
+                
+                const response = await fetch(`${API_URL}/comments/${commentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Errore');
+                }
+                
+                comments = comments.filter(c => c._id !== commentId);
+                displayComments();
+                
+            } catch (error) {
+                console.log('errore:', error);
+                alert('Errore: ' + error.message);
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('it-IT', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showError() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('errorContainer').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

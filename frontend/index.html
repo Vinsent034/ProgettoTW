@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreetCats - Gatti di Strada</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+        }
+        
+        .cat-popup {
+            text-align: center;
+        }
+        
+        .cat-popup img {
+            width: 150px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .add-cat-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">StreetCats</a>
+            
+            <div class="navbar-nav ms-auto">
+                <div id="navbarUser" style="display: none;">
+                    <span class="navbar-text me-3">Ciao, <span id="userName"></span>!</span>
+                    <button class="btn btn-outline-light btn-sm" onclick="logout()">Logout</button>
+                </div>
+                <div id="navbarGuest">
+                    <a href="login.html" class="btn btn-outline-light btn-sm">Login</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Contenuto Principale -->
+    <div class="container-fluid p-0">
+        <!-- Titolo -->
+        <div class="container py-3">
+            <h1 class="text-center">Mappa dei Gatti di Strada</h1>
+            <p class="text-center text-muted">Scopri i gatti della tua zona e condividi i tuoi avvistamenti</p>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Caricamento...</span>
+            </div>
+            <p>Caricamento gatti...</p>
+        </div>
+
+        <!-- Mappa -->
+        <div id="map"></div>
+        
+        <!-- Messaggio se nessun gatto -->
+        <div id="noCats" class="container py-4" style="display: none;">
+            <div class="alert alert-info text-center">
+                <h4>Nessun gatto ancora segnalato!</h4>
+                <p>Sii il primo a condividere un avvistamento.</p>
+                <a href="login.html" class="btn btn-primary">Inizia ora</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pulsante Aggiungi Gatto (solo se loggato) -->
+    <div id="addCatBtn" class="add-cat-btn" style="display: none;">
+        <a href="add-cat.html" class="btn btn-success btn-lg" title="Aggiungi Gatto">
+            + Aggiungi Gatto
+        </a>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    <script>
+        const API_URL = 'http://localhost:3000';
+        let map;
+        let catsData = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+            initMap();
+            loadCats();
+        });
+
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            
+            if (token && user) {
+                const userObj = JSON.parse(user);
+                document.getElementById('navbarUser').style.display = 'block';
+                document.getElementById('navbarGuest').style.display = 'none';
+                document.getElementById('userName').textContent = userObj.name;
+                document.getElementById('addCatBtn').style.display = 'block';
+            } else {
+                document.getElementById('navbarUser').style.display = 'none';
+                document.getElementById('navbarGuest').style.display = 'block';
+                document.getElementById('addCatBtn').style.display = 'none';
+            }
+        }
+
+        function initMap() {
+            // centra su Napoli
+            map = L.map('map').setView([40.8518, 14.2681], 12);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        async function loadCats() {
+            try {
+                const response = await fetch(`${API_URL}/cats`);
+                
+                if (!response.ok) {
+                    throw new Error('Errore nel caricamento');
+                }
+                
+                catsData = await response.json();
+                document.getElementById('loading').style.display = 'none';
+                
+                if (catsData.length === 0) {
+                    document.getElementById('noCats').style.display = 'block';
+                } else {
+                    displayCatsOnMap();
+                }
+                
+            } catch (error) {
+                console.log('errore caricamento:', error);
+                document.getElementById('loading').innerHTML = 
+                    '<div class="alert alert-danger">Errore nel caricamento dei gatti</div>';
+            }
+        }
+
+        function displayCatsOnMap() {
+            catsData.forEach(cat => {
+                const marker = L.marker([cat.location.lat, cat.location.lng]).addTo(map);
+                
+                const popupContent = `
+                    <div class="cat-popup">
+                        <img src="${API_URL}/uploads/${cat.image}" alt="${cat.name}" 
+                             onerror="this.src='https://via.placeholder.com/150x100?text=Foto+non+disponibile'">
+                        <h6 class="mt-2">${cat.name}</h6>
+                        <p class="small text-muted">${formatDate(cat.date)}</p>
+                        <a href="cat-detail.html?id=${cat._id}" class="btn btn-primary btn-sm">
+                            Vedi Dettagli
+                        </a>
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+            });
+            
+            // adatta vista della mappa ai gatti
+            if (catsData.length > 0) {
+                const group = new L.featureGroup(
+                    catsData.map(cat => L.marker([cat.location.lat, cat.location.lng]))
+                );
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('it-IT', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            location.reload();
+        }
+    </script>
+</body>
+</html>

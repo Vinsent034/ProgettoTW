@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aggiungi Gatto - StreetCats</title>
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <style>
+        #mapSelect {
+            height: 300px;
+            width: 100%;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .image-preview {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .location-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .map-instructions {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">StreetCats</a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text me-3">Ciao, <span id="userName"></span>!</span>
+                <a href="index.html" class="btn btn-outline-light btn-sm">Torna alla Mappa</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <h2 class="mb-4">Aggiungi un Nuovo Gatto</h2>
+                
+                <!-- Messaggio errore/successo -->
+                <div id="message" style="display: none;"></div>
+                
+                <form id="catForm" enctype="multipart/form-data">
+                    <!-- Nome del gatto -->
+                    <div class="mb-3">
+                        <label for="catName" class="form-label">Nome del Gatto *</label>
+                        <input type="text" class="form-control" id="catName" required 
+                               placeholder="es. Whiskers, Micio, Felix...">
+                    </div>
+                    
+                    <!-- Foto -->
+                    <div class="mb-3">
+                        <label for="catImage" class="form-label">Foto del Gatto *</label>
+                        <input type="file" class="form-control" id="catImage" accept="image/*" required>
+                        <div class="form-text">Formati supportati: JPG, PNG, GIF (max 5MB)</div>
+                        <img id="imagePreview" class="image-preview" style="display: none;" alt="Anteprima">
+                    </div>
+                    
+                    <!-- Descrizione -->
+                    <div class="mb-3">
+                        <label for="catDescription" class="form-label">Descrizione *</label>
+                        <textarea class="form-control" id="catDescription" rows="4" required
+                                  placeholder="Descrivi il gatto: com'è fisicamente, comportamento, dove lo hai visto..."></textarea>
+                        <div class="form-text">Puoi usare **grassetto** e *corsivo* nel testo</div>
+                    </div>
+                    
+                    <!-- Mappa per posizione -->
+                    <div class="mb-3">
+                        <label class="form-label">Posizione dell'Avvistamento *</label>
+                        <div class="map-instructions">
+                            Clicca sulla mappa per indicare dove hai visto il gatto
+                        </div>
+                        <div id="mapSelect"></div>
+                        <div id="locationInfo" class="location-info" style="display: none;">
+                            <strong>Posizione selezionata:</strong><br>
+                            Latitudine: <span id="selectedLat"></span><br>
+                            Longitudine: <span id="selectedLng"></span>
+                        </div>
+                        <input type="hidden" id="latitude" required>
+                        <input type="hidden" id="longitude" required>
+                    </div>
+                    
+                    <!-- Bottoni -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="index.html" class="btn btn-secondary">Annulla</a>
+                        <button type="submit" class="btn btn-success" id="submitBtn">
+                            Aggiungi Gatto
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    
+    <script>
+        const API_URL = 'http://localhost:3000';
+        let map;
+        let selectedMarker;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+            initMap();
+            setupEventListeners();
+        });
+
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            const user = localStorage.getItem('user');
+            
+            if (!token || !user) {
+                alert('Devi essere loggato per aggiungere un gatto!');
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            const userObj = JSON.parse(user);
+            document.getElementById('userName').textContent = userObj.name;
+        }
+
+        function initMap() {
+            map = L.map('mapSelect').setView([40.8518, 14.2681], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            map.on('click', function(e) {
+                selectLocation(e.latlng.lat, e.latlng.lng);
+            });
+        }
+
+        function selectLocation(lat, lng) {
+            if (selectedMarker) {
+                map.removeLayer(selectedMarker);
+            }
+            
+            selectedMarker = L.marker([lat, lng]).addTo(map);
+            selectedMarker.bindPopup("Posizione selezionata").openPopup();
+            
+            document.getElementById('latitude').value = lat;
+            document.getElementById('longitude').value = lng;
+            document.getElementById('selectedLat').textContent = lat.toFixed(6);
+            document.getElementById('selectedLng').textContent = lng.toFixed(6);
+            document.getElementById('locationInfo').style.display = 'block';
+        }
+
+        function setupEventListeners() {
+            document.getElementById('catImage').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const preview = document.getElementById('imagePreview');
+                        preview.src = e.target.result;
+                        preview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            document.getElementById('catForm').addEventListener('submit', handleSubmit);
+        }
+
+        async function handleSubmit(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('catName').value.trim();
+            const description = document.getElementById('catDescription').value.trim();
+            const image = document.getElementById('catImage').files[0];
+            const lat = document.getElementById('latitude').value;
+            const lng = document.getElementById('longitude').value;
+            
+            // validazione base
+            if (!name || !description || !image || !lat || !lng) {
+                showMessage('Compila tutti i campi', 'error');
+                return;
+            }
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Salvando...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('description', description);
+                formData.append('lat', lat);
+                formData.append('lng', lng);
+                formData.append('image', image);
+                
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    throw new Error('Token mancante, rifare login');
+                }
+                
+                console.log('invio richiesta...');
+                
+                const response = await fetch(`${API_URL}/cats`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                const result = await response.json();
+                console.log('risposta:', result);
+                
+                if (!response.ok) {
+                    throw new Error(result.message || result.error || 'Errore sconosciuto');
+                }
+                
+                showMessage('Gatto aggiunto con successo!', 'success');
+                
+                // aspetto un attimo prima di reindirizzare
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1500);
+                
+            } catch (error) {
+                console.log('errore:', error.message);
+                showMessage('Errore: ' + error.message, 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Aggiungi Gatto';
+            }
+        }
+
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type === 'error' ? 'alert alert-danger' : 'alert alert-success';
+            messageDiv.textContent = text;
+            messageDiv.style.display = 'block';
+            messageDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    </script>
+</body>
+</html>
